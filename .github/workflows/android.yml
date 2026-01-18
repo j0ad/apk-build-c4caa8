@@ -1,0 +1,60 @@
+
+name: Build Android APK
+on:
+  push:
+    branches: [ main, master ]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Core Dependencies
+        run: |
+          npm install --force
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Build Web Project
+        run: |
+          npm run build --if-present
+          if [ -d "dist" ]; then
+            echo "WEB_DIR=dist" >> $GITHUB_ENV
+          else
+            echo "WEB_DIR=build" >> $GITHUB_ENV
+          fi
+
+      - name: Initialize Capacitor
+        run: |
+          # تهيئة كاباسيتور بدون خيارات تفاعلية
+          npx cap init "ConvertApp" "com.convert.app" --web-dir ${{ env.WEB_DIR }}
+          npx cap add android || true
+          
+      - name: Sync and Build Android
+        run: npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Build APK (Gradle)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mobile-App-Debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
